@@ -36,47 +36,60 @@ function addressToPosition() {
   
   var popup = SpreadsheetApp.getUi();
   
-  // Must have selected at least 3 columns (Address, Lat, Lng).
+  // Must have selected at least 4 columns (Address, Lat, Lng).
   // Must have selected at least 1 row.
   
   var columnCount = cells.getNumColumns();
   var rowCount = cells.getNumRows();
 
-  if (columnCount < 3) {
-    popup.alert("Select at least 3 columns: Address in the leftmost column(s); the geocoded Latitude, Longitude will go into the last 2 columns.");
+  if (columnCount < 4) {
+    popup.alert("Select at least 4 columns: Address in the leftmost column(s); the geocoded Latitude, Longitude and URL will go into the last 3 columns.");
     return;
   }
   
   var addressRow;
-
-//  var addressColumnStart = 1; // Address data is in columns [1 .. columnCount - 2].
-//  var addressColumnStop  = columnCount - 2; 
-  
   var addressColumn;
   
-  var latColumn = columnCount - 1; // Latitude  goes into the next-to-last column.
-  var lngColumn = columnCount;     // Longitude goes into the last column.
+  var latColumn = columnCount - 2; // Latitude  goes into the next-to-last column.
+  var lngColumn = columnCount - 1; // Longitude  goes into the next-next-to-last column.
+  var urlColumn = columnCount;     // URL goes into the last column.
   
-  var geocode = function(input) {
+  function geocode(input) {
     var url = 'https://nominatim.openstreetmap.org/search/%22' + input + '%22?format=json&addressdetails=0&limit=1';
-    if (window.XMLHttpRequest) {
-        var request = new XMLHttpRequest();
-    } else {
-        var request = new ActiveXObject('Microsoft.XMLHTTP');
-    }
-    request.open('GET', url, false);
-    request.send();
-    var output = []
-    var json = JSON.parse(request.responseText);
-    var output_lon = json[0]['lon'];
-    var output_lat = json[0]['lat'];
-    output.push(output_lon);
-    output.push(output_lat);
-    return output;
+    var options =
+        {
+          "method"  : "GET",   
+          "followRedirects" : true,
+          "muteHttpExceptions": true
+        };
+    var result = UrlFetchApp.fetch(url, options);
+    if (result.getResponseCode() == 200) {
+      var json = JSON.parse(result.getContentText());
+      if (typeof json[0] !== 'undefined') {
+        var output = []
+        var output_lon = json[0]['lon'];
+        var output_lat = json[0]['lat'];
+        var output_url = 'https://www.openstreetmap.org/edit#map=20/' + output_lat + '/' + output_lon;
+        output.push(output_lon);
+        output.push(output_lat);
+        output.push(output_url);
+        return output;
+      } else {
+        var output = []
+        var output_lon = '';
+        var output_lat = '';
+        var output_url = 'https://www.openstreetmap.org/edit#map=20/' + output_lat + '/' + output_lon;
+        output.push(output_lon);
+        output.push(output_lat);
+        output.push(output_url);
+        return output;
+      }
+    }  
   }
+  
   var location;
 
-  var addresses = sheet.getRange(cells.getRow(), cells.getColumn(), rowCount, columnCount - 2).getValues();
+  var addresses = sheet.getRange(cells.getRow(), cells.getColumn(), rowCount, columnCount - 3).getValues();
   
   // For each row of selected data...
   for (addressRow = 1; addressRow <= rowCount; ++addressRow) {
@@ -94,9 +107,11 @@ function addressToPosition() {
     // Only change cells if geocoder seems to have gotten a 
     // valid response.
     lat = location[1];
-    lng = location[0];     
+    lng = location[0];
+    url = location[2];
     cells.getCell(addressRow, latColumn).setValue(lat);
     cells.getCell(addressRow, lngColumn).setValue(lng);
+    cells.getCell(addressRow, urlColumn).setValue(url);
   }
 };
 
